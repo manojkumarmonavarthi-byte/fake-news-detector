@@ -1,9 +1,10 @@
 import pandas as pd
+import pickle
+
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-import joblib
 
 fake = pd.read_csv("Fake.csv")
 true = pd.read_csv("True.csv")
@@ -11,27 +12,37 @@ true = pd.read_csv("True.csv")
 fake["label"] = 0
 true["label"] = 1
 
-data = pd.concat([fake, true])
+news = pd.concat([fake, true], axis=0)
 
-x = data["text"]
-y = data["label"]
+news = news[["text", "label"]]
 
-x_train, x_test, y_train, y_test = train_test_split(
-    x, y, test_size=0.2, random_state=42
-)
+news.dropna(inplace=True)
+
+x = news["text"]
+y = news["label"]
 
 vectorizer = TfidfVectorizer(stop_words="english", max_df=0.7)
 
-xv_train = vectorizer.fit_transform(x_train)
-xv_test = vectorizer.transform(x_test)
+x = vectorizer.fit_transform(x)
+
+x_train, x_test, y_train, y_test = train_test_split(
+    x,
+    y,
+    test_size=0.2,
+    random_state=42
+)
 
 model = LogisticRegression()
 
-model.fit(xv_train, y_train)
+model.fit(x_train, y_train)
 
-pred = model.predict(xv_test)
+pred = model.predict(x_test)
 
-print("Accuracy:", accuracy_score(y_test, pred))
+accuracy = accuracy_score(y_test, pred)
 
-joblib.dump(model, "model.pkl")
-joblib.dump(vectorizer, "vectorizer.pkl")
+print("Accuracy:", accuracy)
+
+pickle.dump(model, open("model.pkl", "wb"))
+pickle.dump(vectorizer, open("vectorizer.pkl", "wb"))
+
+print("Model Saved Successfully")

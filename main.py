@@ -1,363 +1,208 @@
 import streamlit as st
-import joblib
-import pandas as pd
-import plotly.express as px
+import pickle
 import speech_recognition as sr
 
 from streamlit_option_menu import option_menu
 from database import *
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Fake News Detector",
+    page_title="AI Fake News Detector",
     page_icon="📰",
     layout="wide"
 )
 
-# ---------------- CUSTOM CSS ----------------
-st.markdown("""
-<style>
+model = pickle.load(open("model.pkl", "rb"))
+vectorizer = pickle.load(open("vectorizer.pkl", "rb"))
 
-.main {
-    background-color: #0E1117;
-    color: white;
-}
+create_usertable()
 
-.stButton>button {
-    width: 100%;
-    border-radius: 10px;
-    height: 3em;
-    font-size: 18px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------- DATABASE ----------------
-create_tables()
-
-# ---------------- LOAD MODEL ----------------
-
-
-model = joblib.load("model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
-# ---------------- SESSION ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if "username" not in st.session_state:
     st.session_state.username = ""
 
-# ---------------- VOICE FUNCTION ----------------
-def voice_to_text():
-
-    recognizer = sr.Recognizer()
-
-    try:
-
-        with sr.Microphone() as source:
-
-            st.warning("🎤 Listening... Speak Now")
-
-            recognizer.adjust_for_ambient_noise(
-                source,
-                duration=1
-            )
-
-            audio = recognizer.listen(
-                source,
-                timeout=10,
-                phrase_time_limit=10
-            )
-
-            st.success("✅ Recording Completed")
-
-            text = recognizer.recognize_google(audio)
-
-            return text
-
-    except sr.WaitTimeoutError:
-
-        st.error("⏰ No Voice Detected")
-        return ""
-
-    except sr.UnknownValueError:
-
-        st.error("❌ Could Not Understand Voice")
-        return ""
-
-    except Exception as e:
-
-        st.error(f"Error: {e}")
-        return ""
-
-# ---------------- SIGNUP ----------------
-def signup():
-
-    st.title("📝 Signup")
-
-    username = st.text_input(
-        "Username",
-        key="signup_user"
+with st.sidebar:
+    selected = option_menu(
+        menu_title="Menu",
+        options=["Login", "Signup"],
+        icons=["box-arrow-in-right", "person-plus"],
+        default_index=0,
     )
 
-    password = st.text_input(
+if selected == "Signup":
+
+    st.title("Create Account")
+
+    new_user = st.text_input("Username")
+
+    new_password = st.text_input(
         "Password",
-        type="password",
-        key="signup_pass"
+        type="password"
     )
 
-    if st.button("Create Account"):
+    if st.button("Signup"):
 
-        if username == "" or password == "":
-            st.warning("Please Fill All Fields")
+        add_userdata(new_user, new_password)
 
-        else:
+        st.success("Account Created Successfully")
 
-            result = add_user(
-                username,
-                password
-            )
+        st.info("Go to Login Menu")
+
+elif selected == "Login":
+
+    if not st.session_state.logged_in:
+
+        st.title("🔐 Login")
+
+        username = st.text_input("Username")
+
+        password = st.text_input(
+            "Password",
+            type="password"
+        )
+
+        if st.button("Login"):
+
+            result = login_user(username, password)
 
             if result:
-                st.success(
-                    "Account Created Successfully"
-                )
+
+                st.session_state.logged_in = True
+                st.session_state.username = username
+
+                st.rerun()
 
             else:
-                st.error(
-                    "Username Already Exists"
-                )
-
-# ---------------- LOGIN ----------------
-def login():
-
-    st.title("🔐 Login")
-
-    username = st.text_input(
-        "Username",
-        key="login_user"
-    )
-
-    password = st.text_input(
-        "Password",
-        type="password",
-        key="login_pass"
-    )
-
-    if st.button("Login"):
-
-        result = login_user(
-            username,
-            password
-        )
-
-        if result:
-
-            st.session_state.logged_in = True
-            st.session_state.username = username
-
-            st.rerun()
-
-        else:
-            st.error(
-                "Invalid Username or Password"
-            )
-
-# ---------------- PREDICT FUNCTION ----------------
-def predict_news(news):
-
-    transformed_news = vectorizer.transform([news])
-
-    prediction = model.predict(
-        transformed_news
-    )[0]
-
-    probability = model.predict_proba(
-        transformed_news
-    )
-
-    confidence = round(
-        max(probability[0]) * 100,
-        2
-    )
-
-    if prediction == 1:
-
-        result = "REAL"
-
-        st.success(
-            f"Prediction: {result}"
-        )
+                st.error("Invalid Credentials")
 
     else:
 
-        result = "FAKE"
+        st.title("📰 AI Fake News Detector")
 
-        st.error(
-            f"Prediction: {result}"
+        st.success(
+            f"Welcome {st.session_state.username}"
         )
 
-    st.info(
-        f"Confidence Score: {confidence}%"
-    )
+        tab1, tab2 = st.tabs([
+            "📝 Text Prediction",
+            "🎤 Voice Prediction"
+        ])
 
-    add_history(
-        st.session_state.username,
-        news,
-        result
-    )
+        with tab1:
 
-# ---------------- MAIN APP ----------------
-def app():
+            st.subheader("Enter News Text")
 
-    st.title("📰 AI Fake News Detector")
+            news_text = st.text_area(
+                "",
+                height=180
+            )
 
-    st.success(
-        f"Welcome {st.session_state.username}"
-    )
+            if st.button("Predict News"):
 
-    selected = option_menu(
-        menu_title=None,
-        options=[
-            "Text Prediction",
-            "Voice Prediction"
-        ],
-        icons=[
-            "file-text",
-            "mic"
-        ],
-        orientation="horizontal"
-    )
-
-    # ---------------- TEXT PREDICTION ----------------
-    if selected == "Text Prediction":
-
-        news = st.text_area(
-            "Enter News Text"
-        )
-
-        if st.button("Predict News"):
-
-            if news != "":
-                predict_news(news)
-
-            else:
-                st.warning(
-                    "Please Enter News Text"
-                )
-
-    # ---------------- VOICE PREDICTION ----------------
-    if selected == "Voice Prediction":
-
-        st.subheader("🎤 Voice News Detection")
-
-        if "voice_text" not in st.session_state:
-            st.session_state.voice_text = ""
-
-        if "recording" not in st.session_state:
-            st.session_state.recording = False
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            if st.button("🎙️ Start Recording"):
-
-                st.session_state.recording = True
-
-                voice_text = voice_to_text()
-
-                if voice_text != "":
-
-                    st.session_state.voice_text = voice_text
-
-                    st.success(
-                        "✅ Voice Recognized Successfully"
-                    )
-
-                    predict_news(voice_text)
+                if news_text.strip() == "":
+                    st.warning("Please Enter News Text")
 
                 else:
 
-                    st.error(
-                        "❌ Could Not Recognize Voice"
+                    transformed_text = vectorizer.transform(
+                        [news_text]
                     )
 
-        with col2:
+                    prediction = model.predict(
+                        transformed_text
+                    )[0]
 
-            if st.button("⛔ Stop Recording"):
+                    probability = model.predict_proba(
+                        transformed_text
+                    )
 
-                st.session_state.recording = False
+                    confidence = max(probability[0]) * 100
 
-                st.info("🛑 Recording Stopped")
+                    if prediction == 1:
+                        st.success(
+                            "Prediction: REAL NEWS"
+                        )
+                    else:
+                        st.error(
+                            "Prediction: FAKE NEWS"
+                        )
 
-        if st.session_state.voice_text != "":
+                    st.info(
+                        f"Confidence Score: {confidence:.2f}%"
+                    )
 
-            st.text_area(
-                "Recognized Text",
-                st.session_state.voice_text,
-                height=150
+        with tab2:
+
+            st.subheader("Upload Voice File")
+
+            audio_file = st.file_uploader(
+                "Upload Audio",
+                type=["wav", "mp3"]
             )
 
-    # ---------------- HISTORY ----------------
-    st.subheader("📜 Prediction History")
+            if audio_file is not None:
 
-    history = get_history(
-        st.session_state.username
-    )
+                recognizer = sr.Recognizer()
 
-    if history:
+                try:
 
-        history_df = pd.DataFrame(
-            history,
-            columns=["News", "Result"]
+                    with sr.AudioFile(audio_file) as source:
+                        audio = recognizer.record(source)
+
+                    text = recognizer.recognize_google(audio)
+
+                    st.write("Recognized Text:")
+
+                    st.success(text)
+
+                    transformed_text = vectorizer.transform(
+                        [text]
+                    )
+
+                    prediction = model.predict(
+                        transformed_text
+                    )[0]
+
+                    probability = model.predict_proba(
+                        transformed_text
+                    )
+
+                    confidence = max(probability[0]) * 100
+
+                    if prediction == 1:
+                        st.success(
+                            "Prediction: REAL NEWS"
+                        )
+                    else:
+                        st.error(
+                            "Prediction: FAKE NEWS"
+                        )
+
+                    st.info(
+                        f"Confidence Score: {confidence:.2f}%"
+                    )
+
+                except:
+                    st.error("Could Not Recognize Voice")
+
+        st.divider()
+
+        st.subheader("Sample Real News")
+
+        st.code(
+            "The Indian government announced new infrastructure projects to improve transportation systems across major cities."
         )
 
-        st.dataframe(history_df)
+        st.subheader("Sample Fake News")
 
-        counts = history_df[
-            "Result"
-        ].value_counts()
-
-        fig = px.pie(
-            values=counts.values,
-            names=counts.index,
-            title="Prediction Statistics"
+        st.code(
+            "Aliens landed in Delhi and gifted invisible flying cars to local street vendors yesterday night."
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+        if st.button("Logout"):
 
-    else:
-        st.warning(
-            "No History Found"
-        )
+            st.session_state.logged_in = False
+            st.session_state.username = ""
 
-    # ---------------- LOGOUT ----------------
-    if st.button("Logout"):
-
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-
-        st.rerun()
-
-# ---------------- MENU ----------------
-if st.session_state.logged_in:
-
-    app()
-
-else:
-
-    choice = st.sidebar.selectbox(
-        "Menu",
-        ["Login", "Signup"]
-    )
-
-    if choice == "Login":
-        login()
-
-    else:
-        signup()
+            st.rerun()
