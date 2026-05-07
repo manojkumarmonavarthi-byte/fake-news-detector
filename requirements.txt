@@ -4,3 +4,4 @@ numpy
 scikit-learn
 plotly
 SpeechRecognition
+streamlit-option-menu
