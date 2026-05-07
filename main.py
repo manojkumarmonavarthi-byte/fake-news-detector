@@ -1,5 +1,5 @@
 import streamlit as st
-import pickle
+import joblib
 import pandas as pd
 import plotly.express as px
 import speech_recognition as sr
@@ -37,9 +37,10 @@ st.markdown("""
 create_tables()
 
 # ---------------- LOAD MODEL ----------------
-model = pickle.load(open("model.pkl", "rb"))
-vectorizer = pickle.load(open("vectorizer.pkl", "rb"))
 
+
+model = joblib.load("model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")
 # ---------------- SESSION ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
