@@ -1,48 +1,48 @@
 import pandas as pd
 import pickle
+import re
 
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import PassiveAggressiveClassifier
 from sklearn.metrics import accuracy_score
 
-fake = pd.read_csv("Fake.csv")
-true = pd.read_csv("True.csv")
+# Load dataset
+df = pd.read_csv("news.csv")
 
-fake["label"] = 0
-true["label"] = 1
+# Clean text
+def clean_text(text):
+    text = re.sub(r'[^a-zA-Z]', ' ', str(text))
+    text = text.lower()
+    return text
 
-news = pd.concat([fake, true], axis=0)
+df["text"] = df["text"].apply(clean_text)
 
-news = news[["text", "label"]]
+# Features and labels
+X = df["text"]
+y = df["label"]
 
-news.dropna(inplace=True)
+# Vectorization
+vectorizer = TfidfVectorizer(stop_words='english', max_df=0.7)
+X = vectorizer.fit_transform(X)
 
-x = news["text"]
-y = news["label"]
-
-vectorizer = TfidfVectorizer(stop_words="english", max_df=0.7)
-
-x = vectorizer.fit_transform(x)
-
-x_train, x_test, y_train, y_test = train_test_split(
-    x,
-    y,
-    test_size=0.2,
-    random_state=42
+# Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
 )
 
-model = LogisticRegression()
+# Train model
+model = PassiveAggressiveClassifier(max_iter=50)
+model.fit(X_train, y_train)
 
-model.fit(x_train, y_train)
+# Accuracy
+y_pred = model.predict(X_test)
+score = accuracy_score(y_test, y_pred)
 
-pred = model.predict(x_test)
+print("Accuracy:", score * 100)
 
-accuracy = accuracy_score(y_test, pred)
-
-print("Accuracy:", accuracy)
-
+# Save model
 pickle.dump(model, open("model.pkl", "wb"))
 pickle.dump(vectorizer, open("vectorizer.pkl", "wb"))
 
-print("Model Saved Successfully")
+print("Model saved successfully")
